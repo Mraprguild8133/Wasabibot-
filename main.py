@@ -5,7 +5,7 @@ import humanize
 import hashlib
 import json
 from datetime import datetime
-from typing import Optional, Dict, Any
+from pyrogram.typing import Optional, Dict, Any
 from urllib.parse import quote
 
 import boto3
