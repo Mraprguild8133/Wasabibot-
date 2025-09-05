@@ -12,13 +12,11 @@ import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from boto3.s3.transfer import TransferConfig
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton  # ✅ FIXED
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import FloodWait, MessageNotModified
 from dotenv import load_dotenv
 import aiofiles
-
-# Load environment variables
-load_dotenv()
+from config import Config  # ✅ Use external config
 
 # Configure logging
 logging.basicConfig(
@@ -27,23 +25,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Bot configuration
-API_ID = os.getenv("API_ID")
-API_HASH = os.getenv("API_HASH")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Load configuration from config.py
+API_ID = Config.API_ID
+API_HASH = Config.API_HASH
+BOT_TOKEN = Config.BOT_TOKEN
 
-# Wasabi configuration
-WASABI_ACCESS_KEY = os.getenv("WASABI_ACCESS_KEY")
-WASABI_SECRET_KEY = os.getenv("WASABI_SECRET_KEY")
-WASABI_BUCKET = os.getenv("WASABI_BUCKET")
-WASABI_REGION = os.getenv("WASABI_REGION", "us-east-1")
+WASABI_ACCESS_KEY = Config.WASABI_ACCESS_KEY
+WASABI_SECRET_KEY = Config.WASABI_SECRET_KEY
+WASABI_BUCKET = Config.WASABI_BUCKET
+WASABI_REGION = Config.WASABI_REGION
 
-# Optional configurations
-STORAGE_CHANNEL_ID = os.getenv("STORAGE_CHANNEL_ID")
-MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", "4294967296"))  # 4GB
-
-# File storage for metadata
-FILES_DB = "files_database.json"
+STORAGE_CHANNEL_ID = Config.STORAGE_CHANNEL_ID
+MAX_FILE_SIZE = Config.MAX_FILE_SIZE
+FILES_DB = Config.FILES_DB
 
 
 class WasabiStorage:
@@ -248,7 +242,6 @@ class FileDatabase:
 storage = WasabiStorage()
 file_db = FileDatabase(FILES_DB)
 
-# ✅ Fixed Client initialization
 if not all([API_ID, API_HASH, BOT_TOKEN]):
     logger.error("Missing required Telegram credentials")
     exit(1)
@@ -262,7 +255,6 @@ app = Client(
 )
 
 
-# Progress callback for Telegram messages
 async def progress_callback(message: Message, current: int, total: int, action: str):
     try:
         percentage = (current / total) * 100
@@ -281,8 +273,6 @@ async def progress_callback(message: Message, current: int, total: int, action: 
         pass
 
 
-# --- Handlers and rest of the bot code remain unchanged (start, help, upload, download, stream, etc.) ---
-
 if __name__ == "__main__":
     logger.info("Starting Telegram File Bot...")
     missing_vars = []
@@ -295,3 +285,4 @@ if __name__ == "__main__":
     if not all([WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_BUCKET]):
         logger.warning("Wasabi credentials not configured. Cloud storage will be disabled.")
     app.run()
+            
