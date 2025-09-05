@@ -16,7 +16,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import FloodWait, MessageNotModified
 from dotenv import load_dotenv
 import aiofiles
-from config import Config  # ✅ Use external config
+import Config 
 
 # Configure logging
 logging.basicConfig(
