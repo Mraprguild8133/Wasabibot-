@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from boto3.s3.transfer import TransferConfig
-from pyrogram import Client, filters
+from pyrogram import Client, filters, idle
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import FloodWait, MessageNotModified
 from dotenv import load_dotenv
@@ -274,8 +274,6 @@ async def progress_callback(current: int, total: int, action: str, message: Opti
     except Exception:
         pass
 
-# (KEEP YOUR COMMAND HANDLERS SAME AS BEFORE...)
-
 if __name__ == "__main__":
     logger.info("Starting Telegram File Bot...")
 
@@ -293,6 +291,11 @@ if __name__ == "__main__":
     if not all([WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_BUCKET]):
         logger.warning("Wasabi credentials not configured. Cloud storage will be disabled.")
 
-    logger.info("Bot configuration validated. Starting...")
-    app.run()
-            
+    async def main():
+        await app.start()
+        logger.info("Bot started successfully.")
+        await idle()
+        await app.stop()
+
+    asyncio.run(main())
+                
