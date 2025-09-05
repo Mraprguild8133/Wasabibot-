@@ -36,7 +36,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 WASABI_ACCESS_KEY = os.getenv("WASABI_ACCESS_KEY")
 WASABI_SECRET_KEY = os.getenv("WASABI_SECRET_KEY")
 WASABI_BUCKET = os.getenv("WASABI_BUCKET")
-WASABI_REGION = os.getenv("WASABI_REGION", "us-east-1")
+WASABI_REGION = os.getenv("WASABI_REGION")
 
 # Optional configurations
 STORAGE_CHANNEL_ID = os.getenv("STORAGE_CHANNEL_ID")
