@@ -867,17 +867,9 @@ async def main():
         logger.info("Please check your .env file and ensure all required variables are set.")
         exit(1)
     
-    # Optional Wasabi check
+        # Optional Wasabi check
     if not all([WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_BUCKET]):
         logger.warning("Wasabi credentials not configured. Cloud storage will be disabled.")
     
     logger.info("Bot configuration validated. Starting...")
-    await app.start()
-    logger.info("Bot started successfully!")
-    
-    # Keep the bot running
-    await asyncio.Event().wait()
-
-if __name__ == "__main__":
-    # Run the main function
-    asyncio.run(main())
+    app.run()
