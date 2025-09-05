@@ -8,13 +8,11 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
 from boto3.s3.transfer import TransferConfig
 from pyrogram import Client, filters, idle
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import FloodWait, MessageNotModified
+from pyrogram.errors import FloodWait, MessageNotModified, Unauthorized, UserDeactivated
 from dotenv import load_dotenv
-import aiofiles
 
 # Load environment variables
 load_dotenv()
@@ -72,7 +70,6 @@ class WasabiStorage:
         try:
             if not self.s3_client:
                 return False
-
             self.s3_client.head_bucket(Bucket=WASABI_BUCKET)
             return True
         except Exception as e:
@@ -164,13 +161,11 @@ class WasabiStorage:
         try:
             if not self.s3_client:
                 return None
-
-            url = self.s3_client.generate_presigned_url(
+            return self.s3_client.generate_presigned_url(
                 'get_object',
                 Params={'Bucket': WASABI_BUCKET, 'Key': object_key},
                 ExpiresIn=expiration
             )
-            return url
         except Exception as e:
             logger.error(f"Failed to generate presigned URL: {e}")
             return None
@@ -179,17 +174,12 @@ class WasabiStorage:
         try:
             if not self.s3_client:
                 return False
-
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 await asyncio.get_event_loop().run_in_executor(
                     executor,
-                    lambda: self.s3_client.delete_object(
-                        Bucket=WASABI_BUCKET,
-                        Key=object_key
-                    )
+                    lambda: self.s3_client.delete_object(Bucket=WASABI_BUCKET, Key=object_key)
                 )
-
             logger.info(f"File deleted successfully from cloud: {object_key}")
             return True
         except Exception as e:
@@ -292,10 +282,16 @@ if __name__ == "__main__":
         logger.warning("Wasabi credentials not configured. Cloud storage will be disabled.")
 
     async def main():
-        await app.start()
-        logger.info("Bot started successfully.")
-        await idle()
-        await app.stop()
+        try:
+            await app.start()
+            logger.info("Bot started successfully.")
+            await idle()
+        except UserDeactivated:
+            logger.error("❌ This bot or account has been deactivated by Telegram. Please create a new bot via @BotFather and update BOT_TOKEN.")
+        except Unauthorized:
+            logger.error("❌ Invalid BOT_TOKEN or API credentials. Please check your .env file and regenerate your token from @BotFather.")
+        finally:
+            await app.stop()
 
     asyncio.run(main())
-                
+                    
