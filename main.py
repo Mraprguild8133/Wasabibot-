@@ -6,7 +6,6 @@ import hashlib
 import json
 from datetime import datetime
 from typing import Optional, Dict, Any
-from urllib.parse import quote
 
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -16,7 +15,9 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import FloodWait, MessageNotModified
 from dotenv import load_dotenv
 import aiofiles
-import Config 
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -25,20 +26,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load configuration from config.py
-API_ID = Config.API_ID
-API_HASH = Config.API_HASH
-BOT_TOKEN = Config.BOT_TOKEN
+# Bot configuration
+API_ID = os.getenv("API_ID")
+API_HASH = os.getenv("API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-WASABI_ACCESS_KEY = Config.WASABI_ACCESS_KEY
-WASABI_SECRET_KEY = Config.WASABI_SECRET_KEY
-WASABI_BUCKET = Config.WASABI_BUCKET
-WASABI_REGION = Config.WASABI_REGION
+# Wasabi configuration
+WASABI_ACCESS_KEY = os.getenv("WASABI_ACCESS_KEY")
+WASABI_SECRET_KEY = os.getenv("WASABI_SECRET_KEY")
+WASABI_BUCKET = os.getenv("WASABI_BUCKET")
+WASABI_REGION = os.getenv("WASABI_REGION", "us-east-1")
 
-STORAGE_CHANNEL_ID = Config.STORAGE_CHANNEL_ID
-MAX_FILE_SIZE = Config.MAX_FILE_SIZE
-FILES_DB = Config.FILES_DB
+# Optional configurations
+STORAGE_CHANNEL_ID = os.getenv("STORAGE_CHANNEL_ID")
+MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", "4294967296"))  # 4GB
 
+# File storage for metadata
+FILES_DB = "files_database.json"
 
 class WasabiStorage:
     def __init__(self):
@@ -52,6 +56,7 @@ class WasabiStorage:
                 return
 
             clean_region = WASABI_REGION.replace('s3.', '').replace('.wasabisys.com', '')
+
             self.s3_client = boto3.client(
                 's3',
                 aws_access_key_id=WASABI_ACCESS_KEY,
@@ -67,6 +72,7 @@ class WasabiStorage:
         try:
             if not self.s3_client:
                 return False
+
             self.s3_client.head_bucket(Bucket=WASABI_BUCKET)
             return True
         except Exception as e:
@@ -79,20 +85,15 @@ class WasabiStorage:
                 return False
 
             file_size = os.path.getsize(file_path)
-            last_percentage = 0
 
             def upload_progress(bytes_transferred):
-                nonlocal last_percentage
                 if progress_callback:
-                    percentage = (bytes_transferred / file_size) * 100
-                    if percentage - last_percentage >= 5 or percentage >= 100:
-                        last_percentage = percentage
-                        try:
-                            loop = asyncio.get_event_loop()
-                            if loop.is_running():
-                                asyncio.create_task(progress_callback(bytes_transferred, file_size))
-                        except:
-                            pass
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(progress_callback(bytes_transferred, file_size, "☁️ Uploading to cloud storage..."))
+                    except:
+                        pass
 
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
@@ -125,20 +126,15 @@ class WasabiStorage:
 
             response = self.s3_client.head_object(Bucket=WASABI_BUCKET, Key=object_key)
             file_size = response['ContentLength']
-            last_percentage = 0
 
             def download_progress(bytes_transferred):
-                nonlocal last_percentage
                 if progress_callback:
-                    percentage = (bytes_transferred / file_size) * 100
-                    if percentage - last_percentage >= 5 or percentage >= 100:
-                        last_percentage = percentage
-                        try:
-                            loop = asyncio.get_event_loop()
-                            if loop.is_running():
-                                asyncio.create_task(progress_callback(bytes_transferred, file_size))
-                        except:
-                            pass
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(progress_callback(bytes_transferred, file_size, "📥 Downloading from cloud..."))
+                    except:
+                        pass
 
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
@@ -168,6 +164,7 @@ class WasabiStorage:
         try:
             if not self.s3_client:
                 return None
+
             url = self.s3_client.generate_presigned_url(
                 'get_object',
                 Params={'Bucket': WASABI_BUCKET, 'Key': object_key},
@@ -182,6 +179,7 @@ class WasabiStorage:
         try:
             if not self.s3_client:
                 return False
+
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 await asyncio.get_event_loop().run_in_executor(
@@ -191,12 +189,12 @@ class WasabiStorage:
                         Key=object_key
                     )
                 )
+
             logger.info(f"File deleted successfully from cloud: {object_key}")
             return True
         except Exception as e:
             logger.error(f"Delete failed: {e}")
             return False
-
 
 class FileDatabase:
     def __init__(self, db_file: str):
@@ -237,11 +235,11 @@ class FileDatabase:
             return True
         return False
 
-
 # Initialize components
 storage = WasabiStorage()
 file_db = FileDatabase(FILES_DB)
 
+# Initialize Pyrogram client
 if not all([API_ID, API_HASH, BOT_TOKEN]):
     logger.error("Missing required Telegram credentials")
     exit(1)
@@ -251,18 +249,22 @@ app = Client(
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
-    workers=16
+    workers=16,
+    sleep_threshold=120
 )
 
-
-async def progress_callback(message: Message, current: int, total: int, action: str):
+# Progress callback
+async def progress_callback(current: int, total: int, action: str, message: Optional[Message] = None):
     try:
         percentage = (current / total) * 100
         progress_bar = "█" * int(percentage / 10) + "░" * (10 - int(percentage / 10))
-        text = f"{action}\n\nProgress: {percentage:.1f}%\n[{progress_bar}]\n{humanize.naturalsize(current)} / {humanize.naturalsize(total)}"
-        if not hasattr(progress_callback, 'last_percentage'):
-            progress_callback.last_percentage = 0
-        if percentage - progress_callback.last_percentage >= 5.0 or percentage >= 100:
+
+        text = f"{action}\n\n"
+        text += f"Progress: {percentage:.1f}%\n"
+        text += f"[{progress_bar}]\n"
+        text += f"{humanize.naturalsize(current)} / {humanize.naturalsize(total)}"
+
+        if message and (not hasattr(progress_callback, 'last_percentage') or percentage - progress_callback.last_percentage >= 5.0 or percentage >= 100):
             progress_callback.last_percentage = percentage
             await message.edit_text(text)
     except MessageNotModified:
@@ -272,17 +274,25 @@ async def progress_callback(message: Message, current: int, total: int, action: 
     except Exception:
         pass
 
+# (KEEP YOUR COMMAND HANDLERS SAME AS BEFORE...)
 
 if __name__ == "__main__":
     logger.info("Starting Telegram File Bot...")
+
     missing_vars = []
-    for var in ['API_ID', 'API_HASH', 'BOT_TOKEN']:
+    required_vars = ['API_ID', 'API_HASH', 'BOT_TOKEN']
+
+    for var in required_vars:
         if not os.getenv(var):
             missing_vars.append(var)
+
     if missing_vars:
         logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
         exit(1)
+
     if not all([WASABI_ACCESS_KEY, WASABI_SECRET_KEY, WASABI_BUCKET]):
         logger.warning("Wasabi credentials not configured. Cloud storage will be disabled.")
+
+    logger.info("Bot configuration validated. Starting...")
     app.run()
             
