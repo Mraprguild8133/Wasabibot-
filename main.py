@@ -274,7 +274,7 @@ class FileDatabase:
 
 # Initialize components
 storage = WasabiStorage()
-file_db = FileDatabase(files_database.json)
+file_db = FileDatabase(FILES_DB)
 
 # Initialize Pyrogram client with optimized settings
 if not all([API_ID, API_HASH, BOT_TOKEN]):
